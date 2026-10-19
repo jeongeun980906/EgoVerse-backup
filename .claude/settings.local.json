@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ps -eo cmd)",
+      "Bash(echo \"running: $\\(ps -eo cmd)",
+      "Bash(ps -o pid,etime -p 1244791)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('body_parts:',list\\(d.get\\('body_parts',{}\\).keys\\(\\)\\)\\); print\\(json.dumps\\({k:{kk:vv for kk,vv in v.items\\(\\) if kk in \\('joints','type','ref_name','joint_indexes'\\)} for k,v in d.get\\('body_parts',{}\\).items\\(\\)}, indent=1\\)[:1500]\\)\")",
+      "Bash(cd *)",
+      "Bash(/mnt/ddn/EgoVerse/emimic/bin/python /tmp/eg_head0.py)",
+      "Bash(awk '{print $2,$10}')",
+      "Bash(/mnt/ddn/EgoVerse/emimic/bin/python -c \"compile\\(open\\('/tmp/eg_waist.py'\\).read\\(\\),'x','exec'\\); print\\('syntax ok'\\)\")",
+      "Bash(/mnt/ddn/EgoVerse/emimic/bin/python /tmp/eg_fwd.py)",
+      "Bash(/mnt/ddn/EgoVerse/emimic/bin/python /tmp/eg_arialocal.py)",
+      "Read(//mnt/ddn/dataset/egoverse/**)",
+      "Bash(grep -viE \"^\\\\s*$\")",
+      "Bash(cat)",
+      "Bash(timeout 500 /mnt/ddn/EgoVerse/emimic/bin/python /tmp/eg_kw.py)"
+    ]
+  }
+}
