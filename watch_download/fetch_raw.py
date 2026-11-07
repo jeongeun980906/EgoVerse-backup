@@ -99,13 +99,17 @@ def main():
             prefixes = [key + "zarr.json"] + [key + x + "/" for x in arrs] if arrs else [key]
         else:
             prefixes = [key + "zarr.json"] + [key + arr + "/" for arr in ARRAYS]
+        listed = {}
         for prefix in prefixes:
             if a.repack and prefix.endswith("images.front_1/") and RP.is_repacked(dst / "images.front_1"):
                 continue                      # already repacked: the per-frame keys are intentionally absent
             todo = []
             for page in r2.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
                 for obj in page.get("Contents", []):
-                    f = dst / obj["Key"][len(key):]
+                    rel = obj["Key"][len(key):]
+                    if rel.startswith("images.front_1/c/"):
+                        listed["images.front_1"] = listed.get("images.front_1", 0) + 1
+                    f = dst / rel
                     if not f.exists():
                         todo.append((obj["Key"], f))
             for d in {f.parent for _, f in todo}:
@@ -117,8 +121,12 @@ def main():
                 for k, f in todo:
                     r2.download_file(bucket, k, str(f))
             n += len(todo)
-        if a.repack and (dst / "images.front_1" / "zarr.json").exists():
-            RP.repack(str(dst / "images.front_1"))
+        if a.repack and (dst / "images.front_1" / "zarr.json").exists() and not RP.is_repacked(dst / "images.front_1"):
+            # repack only a COMPLETE download: every chunk object listed on R2 must be present locally
+            have = len(os.listdir(dst / "images.front_1" / "c")) if (dst / "images.front_1" / "c").is_dir() else 0
+            if have < listed.get("images.front_1", 0):
+                raise RuntimeError(f"{row.ep}: {have} of {listed['images.front_1']} video chunks present, not repacking")
+            RP.repack(str(dst / "images.front_1"), listed=listed.get("images.front_1"))
         return row.ep, n
 
     rows = list(hit[ok].itertuples())

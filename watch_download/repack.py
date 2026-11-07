@@ -37,7 +37,7 @@ def is_repacked(arr_dir):
         int(m["chunk_grid"]["configuration"]["chunk_shape"][0]) >= int(m["shape"][0])
 
 
-def repack(arr_dir, keep=False):
+def repack(arr_dir, keep=False, listed=None):
     meta = json.load(open(os.path.join(arr_dir, "zarr.json")))
     if not is_per_frame(meta):
         return "skip (not one-file-per-frame)"
@@ -73,7 +73,10 @@ def repack(arr_dir, keep=False):
     os.replace(os.path.join(arr_dir, "zarr.json.new"), os.path.join(arr_dir, "zarr.json"))
     if not keep:
         shutil.rmtree(old)
-    return f"repacked {n} frames ({sum(1 for o, _ in idx if o != EMPTY)} present) -> 1 file"
+    present = sum(1 for o, _ in idx if o != EMPTY)
+    # audit record: frames in the array, frames packed, and (from fetch_raw) chunk objects listed on R2
+    json.dump({"n_frames": n, "present": present, "listed": listed}, open(os.path.join(arr_dir, "repack_info.json"), "w"))
+    return f"repacked {n} frames ({present} present) -> 1 file"
 
 
 def read_all(arr_dir):

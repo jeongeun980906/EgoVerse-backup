@@ -18,6 +18,7 @@ usage:
   --link   create the state57/action57/meta symlinks (idempotent; existing entries are left alone)
   --check  verify, for every query and reference episode of the training rows:
              * images.front_1/zarr.json exists and all ceil(shape/chunk_shape) chunk files are present
+               (for a repacked episode also: repack_info.json says every frame listed on R2 was packed)
              * state57/state and action57/action exist (directly or via the symlink)
              * the video has at least as many frames as state57 has rows
            exits 1 and writes <video-root>/assemble_missing.txt if anything is wrong.
@@ -81,6 +82,11 @@ def check(ep: str, video_root: str) -> str | None:
     want = {str(i) for i in range(math.ceil(T / ocs))}
     if want - have:
         return f"video incomplete: {len(want - have)}/{len(want)} chunk files missing"
+    info = os.path.join(img, "repack_info.json")       # written by repack.py (fetch_raw.py --repack)
+    if os.path.exists(info):
+        r = json.load(open(info))
+        if r.get("listed") is not None and r["present"] < r["listed"]:
+            return f"repacked video incomplete: {r['present']}/{r['listed']} frames packed"
     for g, a in (("state57", "state"), ("action57", "action")):
         if not os.path.exists(os.path.join(d, g, a, "zarr.json")):
             return f"{g}/{a} missing (run --link, or the episode is absent from egoverse-v10-state)"
