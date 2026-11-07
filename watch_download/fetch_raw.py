@@ -17,11 +17,17 @@ Prerequisites (run by the user, credentials are never printed here):
 Usage:
     python fetch_raw.py --list all_episodes.csv --dry-run          # DB lookup only, no download
     python fetch_raw.py --list all_episodes.csv --full --out DEST  # download into DEST/<episode>/
+    python fetch_raw.py --list all_episodes.csv --full --arrays images.front_1 --repack --out DEST
+        # training-only: video only, one-file-per-frame episodes repacked into one shard (~50K files in total
+        # instead of ~16M); re-running resumes and skips repacked episodes
 """
 import argparse
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import repack as RP  # noqa: E402
 from pathlib import Path
 
 import pandas as pd
@@ -42,6 +48,14 @@ def main():
     ap.add_argument("--list", default=str(HERE / "sample_episodes.csv"))
     ap.add_argument("--full", action="store_true", help="download the WHOLE episode (incl. images)")
     ap.add_argument("--resolved", default=None, help="output csv of resolved paths")
+    ap.add_argument("--arrays", default="",
+                    help="with --full: comma-separated arrays to fetch instead of the whole episode, e.g. "
+                         "images.front_1 (all WATCH training reads from R2; state57/action57 come from HF)")
+    ap.add_argument("--inner-workers", type=int, default=16,
+                    help="parallel downloads inside one episode with many small objects (per-frame video)")
+    ap.add_argument("--repack", action="store_true",
+                    help="with --full: repack a one-file-per-frame images.front_1 into a single shard right after "
+                         "it is downloaded (repack.py). Cuts ~6,000 files per affected scale episode to 1")
     a = ap.parse_args()
 
     sys.path.insert(0, str(EGOVERSE))
@@ -80,13 +94,31 @@ def main():
         key = key.rstrip("/") + "/"
         dst = Path(a.out) / row.ep
         n = 0
-        for prefix in ([key] if a.full else [key + "zarr.json"] + [key + arr + "/" for arr in ARRAYS]):
+        if a.full:
+            arrs = [x for x in a.arrays.split(",") if x]
+            prefixes = [key + "zarr.json"] + [key + x + "/" for x in arrs] if arrs else [key]
+        else:
+            prefixes = [key + "zarr.json"] + [key + arr + "/" for arr in ARRAYS]
+        for prefix in prefixes:
+            if a.repack and prefix.endswith("images.front_1/") and RP.is_repacked(dst / "images.front_1"):
+                continue                      # already repacked: the per-frame keys are intentionally absent
+            todo = []
             for page in r2.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
                 for obj in page.get("Contents", []):
                     f = dst / obj["Key"][len(key):]
-                    f.parent.mkdir(parents=True, exist_ok=True)
                     if not f.exists():
-                        r2.download_file(bucket, obj["Key"], str(f)); n += 1
+                        todo.append((obj["Key"], f))
+            for d in {f.parent for _, f in todo}:
+                d.mkdir(parents=True, exist_ok=True)
+            if len(todo) > 64:   # one-file-per-frame arrays: thousands of small objects, fetch them in parallel
+                with ThreadPoolExecutor(a.inner_workers) as inner:
+                    list(inner.map(lambda kf: r2.download_file(bucket, kf[0], str(kf[1])), todo))
+            else:
+                for k, f in todo:
+                    r2.download_file(bucket, k, str(f))
+            n += len(todo)
+        if a.repack and (dst / "images.front_1" / "zarr.json").exists():
+            RP.repack(str(dst / "images.front_1"))
         return row.ep, n
 
     rows = list(hit[ok].itertuples())
