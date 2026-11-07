@@ -6,7 +6,7 @@
 ## Steps
 
 ```bash
-git clone -b watch-download https://github.com/jeongeun980906/EgoVerse-backup.git
+git clone https://github.com/jeongeun980906/EgoVerse-backup.git
 cd EgoVerse-backup
 
 # AWS CLI
