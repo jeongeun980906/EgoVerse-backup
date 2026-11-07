@@ -1,16 +1,22 @@
-"""Fetch the RAW (pre-smoothing) pose/keypoint arrays of the sampled episodes from the EgoVerse R2 bucket.
+"""Download EgoVerse episodes (zarr v3) from the EgoVerse R2 bucket, resolving each episode's current path
+through the EgoVerse SQL episode table.
 
-Only the small tracking arrays are downloaded (no images):
-    left/right.obs_ee_pose, left/right.obs_keypoints, left/right.obs_wrist_pose, obs_head_pose, zarr.json
--> ~a few MB per episode instead of ~352 MB.
+Two modes:
+  --full   the WHOLE episode, including the video (images.front_1): ~0.28 GB per episode on average,
+           ~3.9 TB for watch_download/all_episodes.csv. This is what WATCH training needs.
+  default  only the small raw tracking arrays (a few MB per episode):
+           left/right.obs_ee_pose, left/right.obs_keypoints, left/right.obs_wrist_pose, obs_head_pose, zarr.json
+
+The R2 episodes do NOT contain state57/action57 (WATCH's 57-d state/action). Those come from the HF dataset
+Jeongeun/egoverse-v10-state and are linked into each episode by assemble.py (see README.md).
 
 Prerequisites (run by the user, credentials are never printed here):
     aws configure                                  # keys from EgoVerse-backup/README.md
     EgoVerse-backup/egomimic/utils/aws/setup_secret.sh   # writes ~/.egoverse_env (R2 + SECRETS_ARN)
 
 Usage:
-    python fetch_raw.py --dry-run        # DB lookup only: how many sampled episodes resolve to a zarr path
-    python fetch_raw.py                  # download into ./raw/<episode>/
+    python fetch_raw.py --list all_episodes.csv --dry-run          # DB lookup only, no download
+    python fetch_raw.py --list all_episodes.csv --full --out DEST  # download into DEST/<episode>/
 """
 import argparse
 import os
